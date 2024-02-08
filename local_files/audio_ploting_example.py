@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch.nn as nn
 import torch
-from IPython.display import Audio
 
 
 class LogMelSpec(nn.Module):
@@ -30,55 +29,23 @@ class MelSpec(nn.Module):
         return self.mel_spectogram_function(x)  # mel spectrogram
 
 class SpecAugment(nn.Module):
-
-    def __init__(self, rate, policy=3, freq_mask=15, time_mask=35):
+    def __init__(self, frequency_mask, time_mask):
         super(SpecAugment, self).__init__()
 
-        self.rate = rate
-
         self.specaug = nn.Sequential(
-            torchaudio.transforms.FrequencyMasking(freq_mask_param=freq_mask),
+            torchaudio.transforms.FrequencyMasking(freq_mask_param=frequency_mask),
             torchaudio.transforms.TimeMasking(time_mask_param=time_mask)
         )
-
-        self.specaug2 = nn.Sequential(
-            torchaudio.transforms.FrequencyMasking(freq_mask_param=freq_mask),
-            torchaudio.transforms.TimeMasking(time_mask_param=time_mask),
-            torchaudio.transforms.FrequencyMasking(freq_mask_param=freq_mask),
-            torchaudio.transforms.TimeMasking(time_mask_param=time_mask)
-        )
-
-        policies = { 1: self.policy1, 2: self.policy2, 3: self.policy3 }
-        self._forward = policies[policy]
 
     def forward(self, x):
-        return self._forward(x)
-
-    def policy1(self, x):
-        probability = torch.rand(1, 1).item()
-        if self.rate > probability:
-            return  self.specaug(x)
+        for _ in range(self.torch_random_value_in_range(1, 3)):
+            x = self.specaug(x)
         return x
+    
+    def torch_random_value_in_range(self, beggining, end):
+        return int((torch.rand(1, 1).item() * 100) % (end - beggining + 1)) + beggining
 
-    def policy2(self, x):
-        probability = torch.rand(1, 1).item()
-        if self.rate > probability:
-            return  self.specaug2(x)
-        return x
-
-    def policy3(self, x):
-        probability = torch.rand(1, 1).item()
-        if probability > 0.5:
-            return self.policy1(x)
-        return self.policy2(x)
-
-
-def preview(sp, rate=16000):
-    ispec = torchaudio.transforms.InverseSpectrogram()
-    waveform = ispec(sp)
-
-    return Audio(waveform[0].numpy().T, rate=rate)
-
+torch.random.manual_seed(7)
 
 sample_speech = "PATH" 
 
@@ -88,14 +55,11 @@ spectrogram = torchaudio.transforms.Spectrogram(n_fft=512)
 spec = spectrogram(speech_waveform)
 spec = spectrogram(speech_waveform)
 
-
 log_mel_spectogram = LogMelSpec(sample_rate=sample_rate, n_mels=128,  win_length=160)
 log_mel_spec = log_mel_spectogram(speech_waveform)
 
 mel_spectogram = MelSpec(sample_rate=sample_rate, n_mels=128,  win_length=160)
 mel_spec = mel_spectogram(speech_waveform)
-
-torch.random.manual_seed(4)
 
 time_masking = torchaudio.transforms.TimeMasking(time_mask_param=100)
 freq_masking = torchaudio.transforms.FrequencyMasking(freq_mask_param=800)
@@ -103,26 +67,18 @@ freq_masking = torchaudio.transforms.FrequencyMasking(freq_mask_param=800)
 time_masked = time_masking(spec)
 freq_masked = freq_masking(spec)
 
+sa = SpecAugment(20, 60)
 
-
-# sa = SpecAugment(sample_rate, 3, 15, 70)
-# github_sol = sa(spec)
-
-fig, axs = plt.subplots(4, 1)
+fig, axs = plt.subplots(6, 1)
 
 ap = AudioPlots(sample_rate)
 ap.plot_waveform(speech_waveform, sample_rate, axis=axs[0], title="Original waveform", xlabel="Time (s)", ylabel="Amplitude")
 ap.plot_spectrogram(spec[0], axis=axs[1], title="Spectrogram", xlabel="Time samples", ylabel="Frequency (Hz)")
 ap.plot_spectrogram(time_masked[0], axis=axs[2], title="Spectrogram Augmentation - Time masking", xlabel="Time samples", ylabel="Frequency (Hz)")
 ap.plot_spectrogram(freq_masked[0], axis=axs[3], title="Spectrogram Augmentation - Frequency masking", xlabel="Time samples", ylabel="Frequency (Hz)")
-# ap.plot_spectrogram(mel_spec[0], axis=axs[4], title="Mel Spectrogram", xlabel="Time samples", ylabel="Frequency (Mel scale)")
-# ap.plot_spectrogram(log_mel_spec[0], axis=axs[5], title="Logarithmic Mel Spectrogram", xlabel="Time samples", ylabel="Frequency (Mel scale)")
-
-
+ap.plot_spectrogram(mel_spec[0], axis=axs[4], title="Mel Spectrogram", xlabel="Time samples", ylabel="Frequency (Mel scale)")
+ap.plot_spectrogram(log_mel_spec[0], axis=axs[5], title="Logarithmic Mel Spectrogram", xlabel="Time samples", ylabel="Frequency (Mel scale)")
 
 fig.tight_layout(pad=-1.5)
-plt.subplot_tool()
-# plt.subplots_adjust(hspace=1.3)
-# plt.subplots_adjust(top=0.1, bottom=0.05)
 
 plt.show()
